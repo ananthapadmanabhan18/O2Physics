@@ -1183,6 +1183,7 @@ struct ExclusiveRhoTo4Pi {
       p1234 = p1 + p2 + p3 + p4;
       k1234 = k1 + k2 + k3 + k4;
 
+      
       k13 = k1 + k3;
       k14 = k1 + k4;
       k23 = k2 + k3;
