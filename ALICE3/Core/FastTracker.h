@@ -13,13 +13,17 @@
 #define ALICE3_CORE_FASTTRACKER_H_
 
 #include "DetLayer.h"
+#include "GeometryContainer.h"
 
 #include <CCDB/BasicCCDBManager.h>
 #include <ReconstructionDataFormats/Track.h>
 
-#include <fairlogger/Logger.h>
+#include <TString.h>
 
-#include <map>
+#include <Rtypes.h>
+
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -65,17 +69,7 @@ class FastTracker
     SetResolutionZ(layerName, resZ);
   }
 
-  void AddSiliconALICE3v4(std::vector<float> pixelResolution);
-  void AddSiliconALICE3v2(std::vector<float> pixelResolution);
-  void AddSiliconALICE3(float scaleX0VD, std::vector<float> pixelResolution);
   void AddTPC(float phiResMean, float zResMean);
-
-  /**
-   * @brief Parses a TEnv configuration file and returns the key-value pairs split per entry
-   * @param filename Path to the TEnv configuration file
-   * @return A map where each key is a layer name and the value is another map of key-value pairs for that layer
-   */
-  std::map<std::string, std::map<std::string, std::string>> parseTEnvConfiguration(std::string filename);
 
   /**
    * @brief Adds a generic detector configuration from the specified file.
@@ -84,10 +78,9 @@ class FastTracker
    * using the provided filename. The file should contain the necessary parameters
    * and settings for the detector to be added.
    *
-   * @param filename Path to the configuration file describing the detector.
-   * @param ccdbManager Pointer to a BasicCCDBManager instance for database access (if needed).
+   * @param configMap Configuration map describing the detector.
    */
-  void AddGenericDetector(std::string filename, o2::ccdb::BasicCCDBManager* ccdbManager = nullptr);
+  void AddGenericDetector(o2::fastsim::GeometryEntry configMap, o2::ccdb::BasicCCDBManager* ccdbManager = nullptr);
 
   void Print();
 
@@ -102,7 +95,7 @@ class FastTracker
    * @param nch Charged particle multiplicity (used for hit density calculations).
    * @return int i.e. number of intercepts (implementation-defined).
    */
-  int FastTrack(o2::track::TrackParCov inputTrack, o2::track::TrackParCov& outputTrack, const float nch);
+  int FastTrack(o2::track::TrackParCov inputTrack, o2::track::TrackParCov& outputTrack, const float nch, const float maxRadius = 100.f);
 
   // For efficiency calculation
   float Dist(float z, float radius);

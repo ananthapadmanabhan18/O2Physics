@@ -13,46 +13,65 @@
 /// \brief Dedicated GFW task to analyse angular correlations in light-ion collision systems
 /// \author Emil Gorm Nielsen, NBI, emil.gorm.nielsen@cern.ch
 
-#include "FlowContainer.h"
-#include "FlowPtContainer.h"
-#include "GFW.h"
-#include "GFWConfig.h"
-#include "GFWCumulant.h"
-#include "GFWPowerArray.h"
-#include "GFWWeights.h"
-#include "GFWWeightsList.h"
+#include "PWGCF/GenericFramework/Core/FlowContainer.h"
+#include "PWGCF/GenericFramework/Core/FlowPtContainer.h"
+#include "PWGCF/GenericFramework/Core/GFW.h"
+#include "PWGCF/GenericFramework/Core/GFWConfig.h"
+#include "PWGCF/GenericFramework/Core/GFWWeights.h"
 
-#include "Common/Core/TrackSelection.h"
+#include "Common/CCDB/EventSelectionParams.h"
 #include "Common/DataModel/Centrality.h"
 #include "Common/DataModel/EventSelection.h"
 #include "Common/DataModel/Multiplicity.h"
 #include "Common/DataModel/TrackSelectionTables.h"
 
-#include "Framework/ASoAHelpers.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/HistogramRegistry.h"
-#include "Framework/RunningWorkflowInfo.h"
-#include "Framework/runDataProcessing.h"
 #include <CCDB/BasicCCDBManager.h>
+#include <CommonConstants/MathConstants.h>
 #include <DataFormatsParameters/GRPMagField.h>
-#include <DataFormatsParameters/GRPObject.h>
+#include <Framework/ASoA.h>
+#include <Framework/AnalysisDataModel.h>
+#include <Framework/AnalysisHelpers.h>
+#include <Framework/AnalysisTask.h>
+#include <Framework/Array2D.h>
+#include <Framework/Configurable.h>
+#include <Framework/Expressions.h>
+#include <Framework/HistogramRegistry.h>
+#include <Framework/HistogramSpec.h>
+#include <Framework/InitContext.h>
+#include <Framework/runDataProcessing.h>
 
 #include <TF1.h>
+#include <TH1.h>
+#include <TH3.h>
+#include <TNamed.h>
+#include <TObjArray.h>
 #include <TPDGCode.h>
 #include <TProfile.h>
 #include <TRandom3.h>
+#include <TString.h>
+
+#include <sys/types.h>
+
+#include <RtypesCore.h>
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstdlib>
 #include <ctime>
+#include <iterator>
 #include <map>
-#include <numeric>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 using namespace o2;
 using namespace o2::framework;
+using namespace o2::analysis::genericframework;
 
 #define O2_DEFINE_CONFIGURABLE(NAME, TYPE, DEFAULT, HELP) Configurable<TYPE> NAME{#NAME, DEFAULT, HELP};
 
@@ -74,6 +93,7 @@ float nchlow = 0;
 float nchup = 3000;
 std::vector<double> centbinning(90);
 int nBootstrap = 10;
+std::vector<std::pair<double, double>> etagapsPtPt;
 GFWRegions regions;
 GFWCorrConfigs configs;
 std::vector<double> multGlobalCorrCutPars;
@@ -84,8 +104,10 @@ std::vector<double> multGlobalT0ACutPars;
 std::vector<int> firstRunsOfFill;
 } // namespace o2::analysis::gfw
 
-struct FlowGfwLightIons {
+// Let's restrict it to a maximum of four subevents for pt-pt correlations, otherwise output overhead starts to become too much
+static constexpr double LongArrayDouble[4][2] = {{-2.0, -2.0}, {-2.0, -2.0}, {-2.0, -2.0}, {-2.0, -2.0}};
 
+struct FlowGfwLightIons {
   O2_DEFINE_CONFIGURABLE(cfgNbootstrap, int, 10, "Number of subsamples")
   O2_DEFINE_CONFIGURABLE(cfgMpar, int, 4, "Highest order of pt-pt correlations")
   O2_DEFINE_CONFIGURABLE(cfgCentEstimator, int, 0, "0:FT0C; 1:FT0CVariant1; 2:FT0M; 3:FT0A")
@@ -114,6 +136,7 @@ struct FlowGfwLightIons {
   O2_DEFINE_CONFIGURABLE(cfgEtaPtPt, float, 0.4, "eta cut for pt-pt correlations used in subevent vn-pt");
   O2_DEFINE_CONFIGURABLE(cfgEtaPtPtGap, float, 0.4, "eta gap for subevent pt-pt correlations");
   O2_DEFINE_CONFIGURABLE(cfgEtaPtPtFull, float, 0.8, "eta cut for pure pt-pt correlations");
+  Configurable<LabeledArray<double>> cfgPtPtGaps{"cfgPtPtGaps", {LongArrayDouble[0], 4, 2, {"subevent 1", "subevent 2", "subevent 3", "subevent 4"}, {"etamin", "etamax"}}, "{etamin,etamax} for all ptpt-subevents"};
   O2_DEFINE_CONFIGURABLE(cfgVtxZ, float, 10, "vertex cut (cm)");
   O2_DEFINE_CONFIGURABLE(cfgOccupancySelection, int, 2000, "Max occupancy selection, -999 to disable");
   struct : ConfigurableGroup {
@@ -279,7 +302,7 @@ struct FlowGfwLightIons {
   TF1* fPtDepDCAxy = nullptr;
 
   o2::framework::expressions::Filter collisionFilter = nabs(aod::collision::posZ) < cfgVtxZ;
-  o2::framework::expressions::Filter trackFilter = nabs(aod::track::eta) < cfgEta && aod::track::pt > cfgPtmin&& aod::track::pt < cfgPtmax && ((requireGlobalTrackInFilter()) || (aod::track::isGlobalTrackSDD == (uint8_t) true)) && (aod::track::itsChi2NCl < cfgChi2PrITSCls) && (aod::track::tpcChi2NCl < cfgChi2PrTPCCls) && nabs(aod::track::dcaZ) < cfgDCAz;
+  o2::framework::expressions::Filter trackFilter = nabs(aod::track::eta) < cfgEta && aod::track::pt > cfgPtmin&& aod::track::pt < cfgPtmax && ((requireGlobalTrackInFilter()) || (aod::track::isGlobalTrackSDD == (uint8_t)true)) && (aod::track::itsChi2NCl < cfgChi2PrITSCls) && (aod::track::tpcChi2NCl < cfgChi2PrTPCCls) && nabs(aod::track::dcaZ) < cfgDCAz;
 
   Preslice<aod::Tracks> perCollision = aod::track::collisionId;
   o2::framework::expressions::Filter mcCollFilter = nabs(aod::mccollision::posZ) < cfgVtxZ;
@@ -329,6 +352,16 @@ struct FlowGfwLightIons {
     }
     firstRunOfCurrentFill = o2::analysis::gfw::firstRunsOfFill.begin();
 
+    for (int i = 0; i < 4; ++i) { // o2-linter: disable=magic-number (maximum of 4 subevents)
+      if (cfgPtPtGaps->getData()[i][0] < -1. || cfgPtPtGaps->getData()[i][1] < -1.)
+        continue;
+      o2::analysis::gfw::etagapsPtPt.push_back(std::make_pair(cfgPtPtGaps->getData()[i][0], cfgPtPtGaps->getData()[i][1]));
+    }
+
+    for (const auto& [etamin, etamax] : o2::analysis::gfw::etagapsPtPt) {
+      LOGF(info, "pt-pt subevent: {%.1f,%.1f}", etamin, etamax);
+    }
+
     AxisSpec phiAxis = {o2::analysis::gfw::phibins, o2::analysis::gfw::philow, o2::analysis::gfw::phiup, "#phi"};
     AxisSpec etaAxis = {o2::analysis::gfw::etabins, -cfgEta, cfgEta, "#eta"};
     AxisSpec vtxAxis = {o2::analysis::gfw::vtxZbins, -cfgVtxZ, cfgVtxZ, "Vtx_{z} (cm)"};
@@ -351,8 +384,8 @@ struct FlowGfwLightIons {
     AxisSpec t0aAxis = {300, 0, 30000, "N_{ch} (T0A)"};
     AxisSpec v0aAxis = {800, 0, 80000, "N_{ch} (V0A)"};
     AxisSpec multpvAxis = {600, 0, 600, "N_{ch} (PV)"};
-    AxisSpec dcaZAXis = {200, -2, 2, "DCA_{z} (cm)"};
-    AxisSpec dcaXYAXis = {200, -0.5, 0.5, "DCA_{xy} (cm)"};
+    AxisSpec dcaZAxis = {200, -2, 2, "DCA_{z} (cm)"};
+    AxisSpec dcaXYAxis = {200, -0.5, 0.5, "DCA_{xy} (cm)"};
     std::vector<double> timebinning(289);
     std::generate(timebinning.begin(), timebinning.end(), [n = -24 / 288., step = 24 / 288.]() mutable {
       n += step;
@@ -387,7 +420,7 @@ struct FlowGfwLightIons {
     }
     if (doprocessMCReco || doprocessData) {
       registry.add("trackQA/before/phi_eta_vtxZ", "", {HistType::kTH3D, {phiAxis, etaAxis, vtxAxis}});
-      registry.add("trackQA/before/pt_dcaXY_dcaZ", "", {HistType::kTH3D, {ptAxis, dcaXYAXis, dcaZAXis}});
+      registry.add("trackQA/before/pt_dcaXY_dcaZ", "", {HistType::kTH3D, {ptAxis, dcaXYAxis, dcaZAxis}});
       registry.add("trackQA/before/nch_pt", "#it{p}_{T} vs multiplicity; N_{ch}; #it{p}_{T}", {HistType::kTH2D, {nchAxis, ptAxis}});
       registry.add("trackQA/before/chi2prTPCcls", "#chi^{2}/cluster for the TPC track segment; #chi^{2}/TPC cluster", {HistType::kTH1D, {{100, 0., 5.}}});
       registry.add("trackQA/before/chi2prITScls", "#chi^{2}/cluster for the ITS track; #chi^{2}/ITS cluster", {HistType::kTH1D, {{100, 0., 50.}}});
@@ -442,7 +475,6 @@ struct FlowGfwLightIons {
       registry.get<TH1>(HIST("eventQA/eventSel"))->GetXaxis()->SetBinLabel(kIsGoodITSLayersAll, "kIsGoodITSLayersAll");
       registry.get<TH1>(HIST("eventQA/eventSel"))->GetXaxis()->SetBinLabel(kMultCuts, "after Mult cuts");
       registry.get<TH1>(HIST("eventQA/eventSel"))->GetXaxis()->SetBinLabel(kTrackCent, "has track + within cent");
-      LOGF(info, "eventsel N bins = %d", registry.get<TH1>(HIST("eventQA/eventSel"))->GetNbinsX());
       if (!cfgRunByRun && cfgFillWeights) {
         registry.add<TH3>("phi_eta_vtxz_ref", "", {HistType::kTH3D, {phiAxis, etaAxis, vtxAxis}});
       }
@@ -478,14 +510,14 @@ struct FlowGfwLightIons {
     fFCptFull->setUseCentralMoments(cfgUseCentralMoments);
     fFCptFull->setUseGapMethod(true);
     fFCptFull->initialise(multAxis, cfgMpar, o2::analysis::gfw::configs, cfgNbootstrap);
-    fFCptFull->initialiseSubevent(multAxis, cfgMpar, cfgNbootstrap);
+    fFCptFull->initialiseSubevent(multAxis, cfgMpar, o2::analysis::gfw::etagapsPtPt.size(), cfgNbootstrap);
     fFCptgen->setUseCentralMoments(cfgUseCentralMoments);
     fFCptgen->setUseGapMethod(true);
     fFCptgen->initialise(multAxis, cfgMpar, o2::analysis::gfw::configs, cfgNbootstrap);
     fFCptgenFull->setUseCentralMoments(cfgUseCentralMoments);
     fFCptgenFull->setUseGapMethod(true);
     fFCptgenFull->initialise(multAxis, cfgMpar, o2::analysis::gfw::configs, cfgNbootstrap);
-    fFCptgenFull->initialiseSubevent(multAxis, cfgMpar, cfgNbootstrap);
+    fFCptgenFull->initialiseSubevent(multAxis, cfgMpar, o2::analysis::gfw::etagapsPtPt.size(), cfgNbootstrap);
 
     fPtDepDCAxy = new TF1("ptDepDCAxy", Form("[0]*%s", cfgDCAxy->c_str()), 0.001, 100);
     fPtDepDCAxy->SetParameter(0, cfgDCAxyNSigma);
@@ -1182,10 +1214,13 @@ struct FlowGfwLightIons {
       (dt == kGen) ? fFCptgenFull->fill(1., track.pt()) : fFCptFull->fill(weff, track.pt());
 
     // Fill pt-pt correlations in subevents
-    if (track.eta() < -cfgEtaPtPtGap && track.eta() > -cfgEtaPtPtFull)
-      (dt == kGen) ? fFCptgenFull->fillSub1(weff, track.pt()) : fFCptFull->fillSub1(weff, track.pt());
-    if (track.eta() > cfgEtaPtPtGap && track.eta() < cfgEtaPtPtFull)
-      (dt == kGen) ? fFCptgenFull->fillSub2(weff, track.pt()) : fFCptFull->fillSub2(weff, track.pt());
+    std::size_t index = 0;
+    for (const auto& [etamin, etamax] : o2::analysis::gfw::etagapsPtPt) {
+      if (etamin < track.eta() && track.eta() < etamax) {
+        (dt == kGen) ? fFCptgenFull->fillSub(weff, track.pt(), index) : fFCptFull->fillSub(weff, track.pt(), index);
+      }
+      ++index;
+    }
     return;
   }
 

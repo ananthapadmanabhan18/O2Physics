@@ -19,23 +19,23 @@
 #include "PWGCF/FemtoDream/Core/femtoDreamContainer.h"
 #include "PWGCF/FemtoDream/Core/femtoDreamDetaDphiStar.h"
 #include "PWGCF/FemtoDream/Core/femtoDreamEventHisto.h"
-#include "PWGCF/FemtoDream/Core/femtoDreamPairCleaner.h"
 #include "PWGCF/FemtoDream/Core/femtoDreamParticleHisto.h"
-#include "PWGCF/FemtoDream/Core/femtoDreamUtils.h"
 
-#include "Framework/ASoAHelpers.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/Configurable.h"
-#include "Framework/Expressions.h"
-#include "Framework/HistogramRegistry.h"
-#include "Framework/O2DatabasePDGPlugin.h"
-#include "Framework/RunningWorkflowInfo.h"
-#include "Framework/StepTHn.h"
-#include "Framework/runDataProcessing.h"
+#include <Framework/ASoA.h>
+#include <Framework/ASoAHelpers.h>
+#include <Framework/AnalysisDataModel.h>
+#include <Framework/AnalysisHelpers.h>
+#include <Framework/AnalysisTask.h>
+#include <Framework/BinningPolicy.h>
+#include <Framework/Configurable.h>
+#include <Framework/Expressions.h>
+#include <Framework/HistogramRegistry.h>
+#include <Framework/HistogramSpec.h>
+#include <Framework/InitContext.h>
+#include <Framework/OutputObjHeader.h>
+#include <Framework/SliceCache.h>
+#include <Framework/runDataProcessing.h>
 
-#include "TRandom3.h"
-
-#include <bitset>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -257,7 +257,7 @@ struct FemtoDreamPairTaskV0Reso {
 
     eventHisto.init(&registry, Option.isMC);
 
-    v0HistoPartOne.init(&registry, Binning.multTempFit, Option.dummy, Binning.pTTrack, Option.dummy, Option.dummy, Binning.tempFitVarV0, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.isMC, V01.pdgCode);
+    v0HistoPartOne.init(&registry, Binning.multTempFit, Option.dummy, Binning.pTTrack, Option.dummy, Option.dummy, Binning.tempFitVarV0, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Binning.invMass, Option.dummy, Option.isMC, V01.pdgCode);
     posChildHistos.init(&registry, Binning.multTempFit, Option.dummy, Binning.pTV0Child, Option.dummy, Option.dummy, Binning.tempFitVarV0Child, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, false, 0);
     negChildHistos.init(&registry, Binning.multTempFit, Option.dummy, Binning.pTV0Child, Option.dummy, Option.dummy, Binning.tempFitVarV0Child, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, Option.dummy, false, 0);
 

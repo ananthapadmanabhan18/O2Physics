@@ -14,27 +14,25 @@
 /// \author Nima Zardoshti <nima.zardoshti@cern.ch>
 //
 
-#include "PWGJE/Core/FastJetUtilities.h"
 #include "PWGJE/Core/JetDerivedDataUtilities.h"
 #include "PWGJE/DataModel/Jet.h"
 #include "PWGJE/DataModel/JetSubstructure.h"
 
-#include "Common/Core/RecoDecay.h"
-#include "Common/Core/TrackSelection.h"
-#include "Common/Core/TrackSelectionDefaults.h"
-#include "Common/DataModel/EventSelection.h"
-#include "Common/DataModel/TrackSelectionTables.h"
+#include <Framework/ASoA.h>
+#include <Framework/AnalysisDataModel.h>
+#include <Framework/AnalysisTask.h>
+#include <Framework/Configurable.h>
+#include <Framework/HistogramRegistry.h>
+#include <Framework/HistogramSpec.h>
+#include <Framework/InitContext.h>
+#include <Framework/runDataProcessing.h>
 
-#include "Framework/ASoA.h"
-#include "Framework/AnalysisDataModel.h"
-#include "Framework/AnalysisTask.h"
-#include "Framework/HistogramRegistry.h"
+#include <string>
+#include <vector>
 
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
-
-#include "Framework/runDataProcessing.h"
 
 struct SubstructureDebugTask {
   HistogramRegistry registry{"registry",
@@ -111,8 +109,9 @@ struct SubstructureDebugTask {
       registry.fill(HIST("h_D0jet_eta"), jet.jetEta());
       registry.fill(HIST("h_D0jet_nTracks"), jet.jetNConstituents());
       registry.fill(HIST("h_D0jet_angularity"), jet.angularity());
-      auto const& candidate = jet.candidate_as<aod::CandidatesD0Data>();
-      registry.fill(HIST("h_D0injet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesD0Data>()) {
+        registry.fill(HIST("h_D0injet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processDataD0, "jets D0 data", true);
@@ -125,8 +124,9 @@ struct SubstructureDebugTask {
       registry.fill(HIST("h_Lcjet_eta"), jet.jetEta());
       registry.fill(HIST("h_Lcjet_nTracks"), jet.jetNConstituents());
       registry.fill(HIST("h_Lcjet_angularity"), jet.angularity());
-      auto const& candidate = jet.candidate_as<aod::CandidatesLcData>();
-      registry.fill(HIST("h_Lcinjet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesLcData>()) {
+        registry.fill(HIST("h_Lcinjet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processDataLc, "jets Lc data", true);
@@ -160,8 +160,9 @@ struct SubstructureDebugTask {
       for (auto const& mcpjet : matchedJets) {
         registry.fill(HIST("h_D0jet_pt_matched"), mcpjet.jetPt(), jet.jetPt());
       }
-      auto const& candidate = jet.candidate_as<aod::CandidatesD0MCD>();
-      registry.fill(HIST("h_D0injet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesD0MCD>()) {
+        registry.fill(HIST("h_D0injet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processMCDD0, "jets D0 mcd", false);
@@ -178,8 +179,9 @@ struct SubstructureDebugTask {
       for (auto const& mcpjet : matchedJets) {
         registry.fill(HIST("h_Lcjet_pt_matched"), mcpjet.jetPt(), jet.jetPt());
       }
-      auto const& candidate = jet.candidate_as<aod::CandidatesLcMCD>();
-      registry.fill(HIST("h_Lcinjet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesLcMCD>()) {
+        registry.fill(HIST("h_Lcinjet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processMCDLc, "jets Lc mcd", false);
@@ -205,8 +207,9 @@ struct SubstructureDebugTask {
       registry.fill(HIST("h_mcpD0jet_eta"), jet.jetEta());
       registry.fill(HIST("h_mcpD0jet_nTracks"), jet.jetNConstituents());
       registry.fill(HIST("h_mcpD0jet_angularity"), jet.angularity());
-      auto const& candidate = jet.candidate_as<aod::CandidatesD0MCP>();
-      registry.fill(HIST("h_mcpD0injet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesD0MCP>()) {
+        registry.fill(HIST("h_mcpD0injet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processMCPD0, "jets D0 mcp", false);
@@ -219,8 +222,9 @@ struct SubstructureDebugTask {
       registry.fill(HIST("h_mcpLcjet_eta"), jet.jetEta());
       registry.fill(HIST("h_mcpLcjet_nTracks"), jet.jetNConstituents());
       registry.fill(HIST("h_mcpLcjet_angularity"), jet.angularity());
-      auto const& candidate = jet.candidate_as<aod::CandidatesLcMCP>();
-      registry.fill(HIST("h_mcpLcinjet_pt"), candidate.pt());
+      for (auto const& candidate : jet.candidates_as<aod::CandidatesLcMCP>()) {
+        registry.fill(HIST("h_mcpLcinjet_pt"), candidate.pt());
+      }
     }
   }
   PROCESS_SWITCH(SubstructureDebugTask, processMCPLc, "jets Lc mcp", false);
