@@ -18,6 +18,7 @@
 #include "PWGLF/DataModel/mcCentrality.h"
 
 #include "Common/CCDB/EventSelectionParams.h"
+#include "Common/Core/RecoDecay.h"
 #include "Common/DataModel/Centrality.h"
 #include "Common/DataModel/EventSelection.h"
 #include "Common/DataModel/McCollisionExtra.h"
@@ -27,6 +28,7 @@
 #include "Common/DataModel/TrackSelectionTables.h"
 
 #include <CommonConstants/MathConstants.h>
+#include <Framework/ASoAHelpers.h>
 #include <Framework/AnalysisDataModel.h>
 #include <Framework/AnalysisHelpers.h>
 #include <Framework/AnalysisTask.h>
@@ -429,7 +431,7 @@ struct FemtoPairEfficiency {
     ROOT::Math::PtEtaPhiMVector particle1;
     ROOT::Math::PtEtaPhiMVector particle2;
 
-    for (auto const& [p1, p2] : o2::soa::combinations(o2::soa::CombinationsUpperIndexPolicy(tracks, tracks))) {
+    for (auto const& [p1, p2] : o2::soa::combinations(o2::soa::CombinationsStrictlyUpperIndexPolicy(tracks, tracks))) {
 
       bool order1 = checkTrack(p1, TrackSel1) && checkTrackPid(p1, TrackSel1) &&
                     checkTrack(p2, TrackSel2) && checkTrackPid(p2, TrackSel2);
@@ -484,8 +486,9 @@ struct FemtoPairEfficiency {
   {
     float mass1 = o2::analysis::femto::utils::getPdgMass(std::abs(TrackSel1.pdgCode.value));
     float mass2 = o2::analysis::femto::utils::getPdgMass(std::abs(TrackSel2.pdgCode.value));
+    bool foundPair = false;
 
-    for (auto const& [p1, p2] : o2::soa::combinations(o2::soa::CombinationsUpperIndexPolicy(tracks, tracks))) {
+    for (auto const& [p1, p2] : o2::soa::combinations(o2::soa::CombinationsStrictlyUpperIndexPolicy(tracks, tracks))) {
 
       bool order1 = checkTrackMC(p1, TrackSel1) && checkTrackMC(p2, TrackSel2) &&
                     std::abs(p1.pdgCode()) == std::abs(TrackSel1.pdgCode.value) &&
@@ -523,9 +526,9 @@ struct FemtoPairEfficiency {
       if (kstar > kStarMax.value) {
         continue;
       }
-      return true;
+      foundPair = true;
     }
-    return false;
+    return foundPair;
   }
 
   template <typename CheckCol, typename CheckTracks>
